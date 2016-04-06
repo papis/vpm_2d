@@ -533,9 +533,9 @@ Subroutine writesol
       ! if(iwrite.ne.0) return
         write(filout,'(i5.5,a)') NTIME_pm,'solution.dat'
         open(1,file=filout)
-        WRITE(1,'(a190)')'VARIABLES = "X" "Y" "U" "V" "VORTZ" '
-        WRITE(1,*)'ZONE I=',NXf_bl(1)-NXs_bl(1)+1,' J=',NYf_bl(1) - NYs_bl(1) + 1,&
-            ' K=',1,' F=POINT'
+      ! WRITE(1,'(a190)')'VARIABLES = "X" "Y" "U" "V" "VORTZ" '
+      ! WRITE(1,*)'ZONE I=',NXf_bl(1)-NXs_bl(1)+1,' J=',NYf_bl(1) - NYs_bl(1) + 1,&
+      !     ' K=',1,' F=POINT'
         k=1
         do j=NYs_bl(1),NYf_bl(1)
             do i=NXs_bl(1),NXf_bl(1)
