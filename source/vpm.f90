@@ -109,6 +109,7 @@ contains
    nullify(XP)
    nullify(UP)
    nullify(GP)
+
   QP=>QP_in; XP=>XP_in
   UP=>UP_in; GP=>GP_in
   NVR = NVR_in
@@ -128,7 +129,7 @@ contains
   
  if (my_rank.eq.0)write(*,*) achar(27)//'[1;31m REALTIME ',NTIME_pm,'WhatToDo = ',WhatTodo,achar(27)//'[0m'
   if (WhatToDo.eq.0) then 
-      ND=3
+      ND=2
    !  if (NTIME_pm.eq.0) then 
       open(1,file='pm.inp')
       read(1,*) DXpm,DYpm,DZpm
@@ -140,33 +141,25 @@ contains
       read(1,*) NBI,NBJ,NBK
       read(1,*) NREMESH, ncell_rem 
       read(1,*) iyntree,ilevmax
-      read(1,*) OMPTHREADS
       read(1,*) idefine
-      read(1,*) iynslice
       read(1,*) IPMWRITE
-      if(IPMWRITE.gt.10) stop  !maximume value of writes equal to 10
-      if(IPMWRITE.GT.0) then
-        do i=1,IPMWRITE !max value 10
-      read(1,*) IPMWSTART(i), IPMWSTEPS(i)
-        enddo
-      endif
-      close(1)
    !  endif
       call define_sizes
      !if (my_rank.eq.0) then 
           if (allocated(velvrx_pm)) then 
               deallocate(velvrx_pm,velvry_pm,velvrz_pm)
-              allocate (velvrx_pm(NXpm,NYpm,NZpm),velvry_pm(NXpm,NYpm,NZpm),velvrz_pm(Nxpm,NYpm,NZpm))
-              velvrx_pm=0.d0;velvry_pm=0.d0;velvrz_pm=0.d0
+              allocate (velvrx_pm(NXpm,NYpm,NZpm),velvry_pm(NXpm,NYpm,NZpm))
+              velvrx_pm=0.d0;velvry_pm=0.d0
           else 
-              allocate (velvrx_pm(NXpm,NYpm,NZpm),velvry_pm(NXpm,NYpm,NZpm),velvrz_pm(Nxpm,NYpm,NZpm))
-              velvrx_pm=0.d0;velvry_pm=0.d0;velvrz_pm=0.d0
+              allocate (velvrx_pm(NXpm,NYpm,NZpm),velvry_pm(NXpm,NYpm,NZpm))
+              velvrx_pm=0.d0;velvry_pm=0.d0
           endif      
 
-         nullify(velx);nullify(vely);nullify(velz)
-         velx=>velvrx_pm; vely=>velvry_pm;velz=>velvrz_pm
+         nullify(velx);nullify(vely)
+         velx=>velvrx_pm; vely=>velvry_pm
          iwrite=0
      !endif
+      close(1)
       return
   endif
   call MPI_BCAST(NVR,1,MPI_INTEGER,0,MPI_COMM_WORLD,ierr)
@@ -213,7 +206,7 @@ if (WhatTodo.lt.4) then
   IF (II.ne.0) then
          nb = my_rank + 1
          NN_tmp(1:3)     =  NNbl(1:3,nb)
-         call rhsscat_3d(BLOCKS,NN_tmp,NNbl,NNbl_bl,NN_bl,nb_i,nb_j,nb_k,RHS_pm_bl)
+         call rhsscat(BLOCKS,NN_tmp,NNbl,NNbl_bl,NN_bl,nb_i,nb_j,RHS_pm_bl)
   ENDIF
   if(my_rank.eq.0)then 
             et=MPI_WTIME()
@@ -228,34 +221,12 @@ if (WhatTodo.lt.4) then
    endif
 
 
-  if (WhatToDo.eq.1) then 
-     if (my_rank.eq.0)then 
-         velvrx_pm=0.d0;velvry_pm=0.d0;velvrz_pm=0.d0
-
-         !call convect_first_order(Xbound,Dpm,NN,NN_bl)
-         call calc_velocity_serial_3d(0)
-      !  if(mod(NTIME,NWRITE).eq.0) call writesol(NTIME)
-
-         !if (ND.eq.3) then 
-         ! call hill_error(NN,NN_bl,Xbound,Dpm,SOL_pm,velvrx_pm,velvry_pm,velvrz_pm)
-         ! call writesol(NTIME)
-          !stop
-         !endif
-
-      !  RHS_pm_in=>RHS_pm
-         deallocate(SOL_pm)
-         deallocate(RHS_pm)
-     endif
-     deallocate(SOL_pm_bl,RHS_pm_bl)
-     return
-  endif
-
   if (WhatToDo.eq.2) then 
      if (my_rank.eq.0)then 
          !call convect_first_order(Xbound,Dpm,NN,NN_bl)
          st=MPI_WTIME()
-         velvrx_pm=0;velvry_pm=0;velvrz_pm=0
-         call calc_velocity_serial_3d(1)
+         velvrx_pm=0;velvry_pm=0
+         call calc_velocity_serial_2d
          et= MPI_WTIME()
          write(*,*) 'fd',int((et-st)/60),'m',mod(et-st,60.d0),'s'
    !     call calc_antidiffusion
@@ -264,107 +235,51 @@ if (WhatTodo.lt.4) then
        !                           velvrx_pm,velvry_pm,velvrz_pm,&
        !                           Xbound,Dpm,NN,NN_bl,NVR,neqpm,interf_iproj,itypeb,NVR_size)
   !      if(mod(NTIME_pm,20).eq.0.or.NTIME_pm.eq.1) call writesol
-         if(mod(NTIME_pm,100).eq.0.or.NTIME_pm.eq.1) call writesol
-         call writeline
+          print *, NTIME_pm,IPMWRITE
+         if(mod(NTIME_pm,IPMWRITE).eq.0.or.NTIME_pm.eq.1) call writesol
 
     endif
         itypeb=1
         call back_to_particles_par
          
-           iwrite=0
-     !if(IPMWRITE.GT.0) then
-     !  do i=1,IPMWRITE
-     ! if(NTIME.ge.IPMWSTART(i).and.NTIME.le.(IPMWSTART(i)+IPMWSTEPS(i))) call writesol(NTIME)
-     !  enddo
-     !endif
-         !if (ND.eq.3) then 
-         ! call hill_error(NN,NN_bl,Xbound,Dpm,SOL_pm,velvrx_pm,velvry_pm,velvrz_pm)
-         ! call writesol(NTIME)
-          !stop
-         !endif
-
-      !  RHS_pm_in=>RHS_pm
          deallocate(SOL_pm)
          deallocate(RHS_pm)
-         deallocate(velvrx_pm,velvry_pm,velvrz_pm)
+         deallocate(velvrx_pm,velvry_pm)
      deallocate(SOL_pm_bl,RHS_pm_bl)
      return
   endif
 endif
 
-  if (WhatToDo.eq.4) then 
-     if (my_rank.eq.0)then 
-
-
-         call calc_velocity_serial_3d(-1)
-    !    itypeb=1!normal back to particles
-    !    call back_to_particles_3D(SOL_pm,RHS_pm,XP,QP,UP,GP,&
-    !                              velvrx_pm,velvry_pm,velvrz_pm,&
-    !                              Xbound,Dpm,NN,NN_bl,NVR,neqpm,interf_iproj,itypeb,NVR_size)
-
-        if(IPMWRITE.GT.0) then
-          do i=1,IPMWRITE
-          if(NTIME_pm.ge.IPMWSTART(i).and.NTIME_pm.le.(IPMWSTART(i)+IPMWSTEPS(i))) call writesol
-          enddo
-        endif
-        if(iynslice.eq.1)call writesolXavatar
-      endif
-        itypeb=1
-        call back_to_particles_par
-         
-        iwrite=0
-      !  RHS_pm_in=>RHS_pm
-      !  velx=>velvrx_pm; vely=>velvry_pm;velz=>velvrz_pm
-         deallocate(SOL_pm)
-         deallocate(RHS_pm)
-         deallocate(SOL_pm_bl,RHS_pm_bl)
-     return
-  endif
   
- if (WhatToDo.eq.5) then 
-     if (my_rank.eq.0) then 
- !diffusion stores -NI*grad^2 w * Vol in GP(1,:)
-         
-         call diffuse_vort_3d
-       ! itypeb=2!back to particles the diffused vorticity
-       ! call back_to_particles_3D(SOL_pm,RHS_pm,XP,QP,UP,GP,&
-       !                           velvrx_pm,velvry_pm,velvrz_pm,&
-       !                           Xbound,Dpm,NN,NN_bl,NVR,neqpm,interf_iproj,itypeb,NVR_size)
-      endif
-        itypeb=2
-        call back_to_particles_par
-       deallocate(SOL_pm,RHS_pm)
-       deallocate(SOL_pm_bl,RHS_pm_bl)
-     return
-
- endif 
 contains
      Subroutine pmesh_solve
             !Yaps or Serial Pmesh
             IF(II.eq.0) then
                 IF(my_rank.eq.0) then
-                        write(*,*) 'Solving_pm'
                         SOL_pm(1:neqpm,:,:,:)=0.0
-                        itree=0
+                       !call interp_out_sol(SOL_pm_out,NN_out,NN_bl_out,SOL_pm,NN,NN_bl,Xbound_out,Xbound,Dpm_out,Dpm)
+                        ivel=1
                         iynbc=1!for infinite domain bc's
-                        call pmesh(SOL_pm,RHS_pm,QP,XP,Xbound,DPm,NN,NN_bl,ND,Nblocks,ibctyp,1,3,&
+                        itree=0
+                        call pmesh(SOL_pm,RHS_pm,QP,XP,Xbound,DPm,NN,NN_bl,ND,Nblocks,ibctyp,1,1,&
                                    iynbc,NVR,itree,ilevmax)
-                      ! call calc_velocity_serial_3d(1)
-                        write(*,*) 'PM_solved'
+
                 ENDIF
                 !--------------------------------------------
-                    call velbcast_3d
             ELSE
-                iret =0
-                call yaps3d(SOL_pm_bl,RHS_pm_bl,Xbound_bl,Xbound_coarse,Dpm,Dpm_coarse,NNbl,NNbl_bl,&
-                    NN_coarse,NN_bl_coarse,ND,BLOCKS,ibctyp,1,neqpm,ncoarse,NBI,NBJ,NBK,nb_i,nb_j,nb_k,&
-                    iret,iyntree,ilevmax,neqpm)
-                
-                nb              =  my_rank + 1
-                NN_tmp(1:3)     =  NNbl(1:3,nb)
-                NN_bl_tmp(1:6)  =  NNbl_bl(1:6,nb)
-                Xbound_tmp(1:6) =  Xbound_bl(1:6,nb)
-                call solget_3d(BLOCKS,NBI,NBJ,NBK,NN_tmp,NNbl,NNbl_bl,NN_bl,SOL_pm_bl)
+                   iret=0
+                   !SOL_pm is zero'd in yaps.iret=1 to add outer particle contribution
+                   call yaps2d(SOL_pm_bl,RHS_pm_bl,Xbound_bl,Xbound_coarse,Dpm,Dpm_coarse,NNbl,NNbl_bl,&
+                        NN_coarse,NN_bl_coarse,ND,BLOCKS,ibctyp,1,1,ncoarse,NBI,NBJ,nb_i,nb_j,iret,&
+                        iyntree,ilevmax,neqpm)
+                 
+                   nb = my_rank + 1
+                   NN_tmp(1:3)     =  NNbl(1:3,nb)
+                   NN_bl_tmp(1:6)  =  NNbl_bl(1:6,nb)
+                   Xbound_tmp(1:6) =  Xbound_bl(1:6,nb)
+                  !write(*,*) nb,NN_tmp,NN_bl_tmp
+                   call solget(BLOCKS,NBI,NBJ,NN_tmp,NNbl,NNbl_bl,NN_bl,SOL_pm_bl)
+
                !if (my_rank.eq.0) call calc_velocity_serial_3d(1)
                !call velbcast_3d
             ENDIF
@@ -388,7 +303,7 @@ contains
                 do i=1,neqpm+1
                    ieq(i)=i
                 enddo
-                call project_particles_3D(RHS_pm,QP_scatt,XP_scatt,NVR_projscatt,NVR_p,neqpm+1,ieq,neqpm+1,QINF,NVR_p)
+                call project_particles_2D(RHS_pm,QP_scatt,XP_scatt,NVR_projscatt,NVR_p,neqpm+1,ieq,neqpm+1,QINF,NVR_p)
 
                 call proj_gath(NN)
                 if (my_rank.eq.0) then 
@@ -402,7 +317,7 @@ contains
                   !call  projlibinit(Xbound,Dpm,NN,NN_bl,EPSVOL,IDVPM,ND)
                   !call project_particles_3D(RHS_pm,QP,XP,NVR_projscatt,NVR,neqpm+1,ieq,neqpm+1,QINF,NVR_size)
                     call omp_set_num_threads(OMPTHREADS)
-                    call project_vol3d(RHS_pm,neqpm+1,ieq,neqpm+1,IDVPM)
+                    call project_vol2d(RHS_pm,neqpm+1,ieq,neqpm+1,IDVPM)
                     et=MPI_WTIME()
                     write(*,*) 'Proj',int((et-st)/60),'m',mod(et-st,60.d0),'s'
                     call omp_set_num_threads(1)
@@ -418,7 +333,7 @@ contains
        if (my_rank.eq.0) st=MPI_WTIME()
          call rhsbcast(RHS_pm,NN,neqpm+1)
          call rhsbcast(SOL_pm,NN,neqpm)
-         call velbcast_3d
+         call velbcast
          call MPI_BCAST(NVR,1,MPI_INTEGER,0,MPI_COMM_WORLD,ierr)
          NVR_p=NVR/np
          if (my_rank.eq.0) NVR_p = NVR_p + mod(NVR,np)
@@ -432,8 +347,8 @@ contains
                write(*,*) 'backcomm',int((et-st)/60),'m',mod(et-st,60.d0),'s'
          endif
         if (my_rank.eq.0) st=MPI_WTIME()
-         call back_to_particles_3D(SOL_pm,RHS_pm,XP_scatt,QP_scatt,UP_scatt,GP_scatt,&
-                                   velvrx_pm,velvry_pm,velvrz_pm,&
+         call back_to_particles_2D(SOL_pm,RHS_pm,XP_scatt,QP_scatt,UP_scatt,GP_scatt,&
+                                   velvrx_pm,velvry_pm,&
                                    Xbound,Dpm,NN,NN_bl,NVR_p,neqpm,interf_iproj,itypeb,NVR_p)
           call particles_gath
          deallocate (XP_scatt,QP_scatt,UP_scatt,GP_scatt)
@@ -618,173 +533,35 @@ Subroutine writesol
       ! if(iwrite.ne.0) return
         write(filout,'(i5.5,a)') NTIME_pm,'solution.dat'
         open(1,file=filout)
-        WRITE(1,'(a190)')'VARIABLES = "X" "Y" "Z" "U" "V" "W" "VORTX" "VORTY" "VORTZ"'
+        WRITE(1,'(a190)')'VARIABLES = "X" "Y" "U" "V" "VORTZ" '
         WRITE(1,*)'ZONE I=',NXf_bl(1)-NXs_bl(1)+1,' J=',NYf_bl(1) - NYs_bl(1) + 1,&
-            ' K=',NZf_bl(1) - NZs_bl(1) +1 ,' F=POINT'
-        do k=NZs_bl(1),NZf_bl(1)
-            do j=NYs_bl(1),NYf_bl(1)
-                do i=NXs_bl(1),NXf_bl(1)
-                    ! WRITE(1,*)'ZONE I=',NXpm,' J=',NYpm,' F=POINT'
-                    ! do j=1,NYpm
-                    !   do i=1,NXpm
-                    XPM=XMIN_pm+(I-1)*DXpm
-                    YPM=YMIN_pm+(J-1)*DYpm
-                    ZPM=ZMIN_pm+(K-1)*DZpm
-                    velocx = VelvrX_pm(i,j,k)
-                    velocy = VelvrY_pm(i,j,k)
-                    velocz = VelvrZ_pm(i,j,k)
+            ' K=',1,' F=POINT'
+        k=1
+        do j=NYs_bl(1),NYf_bl(1)
+            do i=NXs_bl(1),NXf_bl(1)
+                ! WRITE(1,*)'ZONE I=',NXpm,' J=',NYpm,' F=POINT'
+                ! do j=1,NYpm
+                !   do i=1,NXpm
+                XPM=XMIN_pm+(I-1)*DXpm
+                YPM=YMIN_pm+(J-1)*DYpm
+                velocx = VelvrX_pm(i,j,1)
+                velocy = VelvrY_pm(i,j,1)
 
-                    WRITE(1,'(16(e28.17,1x))')XPM,YPM,ZPM,velocx,velocy,velocz,-RHS_pm(1,I,J,K),&
-                                             -RHS_pm(2,I,J,K),&
-                                             -RHS_pm(3,I,J,K)!,RHS_pm(4,I,J,K),SOL_pm(1,I,J,K),SOL_pm(2,I,J,K), SOL_pm(3,I,J,K)
+                WRITE(1,'(16(e28.17,1x))')XPM,YPM,velocx,velocy,-RHS_pm(1,I,J,1)
 
 
-                enddo
             enddo
+            write(1,*)
         enddo
         close(1)
     iwrite=1
     !   ---FOR PLOTTING PURPOSES ONLY
-    call system('~/bin/preplot '//filout//' >/dev/null')
+  ! call system('~/bin/preplot '//filout//' >/dev/null')
  
   ! call system('rm '//filout)
 
-  return
-    write(filout,'(i5.5,a)') NTIME_pm,'flowfield.dat'
-    open(1,file=filout,form='unformatted')
-    write(1) NXs_bl(1),NXf_bl(1)
-    write(1) NYs_bl(1),NYf_bl(1)
-    write(1) NZs_bl(1),NZf_bl(1)
-    write(1) DXpm,DYpm,DZpm
-    write(1) XMIN_pm,YMIN_pm,ZMIN_pm
-    do k=NZs_bl(1),NZf_bl(1)
-        do j=NYs_bl(1),NYf_bl(1)
-            do i=NXs_bl(1),NXf_bl(1)
-                XPM=XMIN_pm+(I-1)*DXpm
-                YPM=YMIN_pm+(J-1)*DYpm
-                ZPM=ZMIN_pm+(K-1)*DZpm
-                velocx = VelvrX_pm(i,j,k)
-                velocy = VelvrY_pm(i,j,k)
-                velocz = VelvrZ_pm(i,j,k)
-
-                WRITE(1)       XPM,YPM,ZPM,velocx,velocy,velocz,-RHS_pm(1,I,J,K),&
-                               -RHS_pm(2,I,J,K),&
-                               -RHS_pm(3,I,J,K)
-
-            enddo
-        enddo
-    enddo
-
-    close(1)
 
 End Subroutine writesol
 
-Subroutine writesolXavatar
-
-! AVATAR T2.4 specific: rotor + turbulent particles inflow [PM]
-
-    use vpm_vars        
-    use pmeshpar
-    use parvar
-    use pmgrid
-    use MPI
-
-    character*50      :: filout
-    integer           :: i,j,k
-    double precision  :: XPM,YPM,ZPM,velocx,velocy,velocz
-    integer,dimension(15) :: NX_AVA
-    integer               :: NXPOS_AVA_512_128_128, ii
-    
-     NXPOS_AVA_512_128_128=15
-     NX_AVA(1)=2
-     NX_AVA(2)=15
-     NX_AVA(3)=40
-     NX_AVA(4)=65
-     NX_AVA(5)=90
-     NX_AVA(6)=103
-     NX_AVA(7)=128
-     NX_AVA(8)=154
-     NX_AVA(9)=205
-     NX_AVA(10)=256
-     NX_AVA(11)=308
-     NX_AVA(12)=365
-     NX_AVA(13)=417
-     NX_AVA(14)=470
-     NX_AVA(15)=512
-     write(filout,'(i5.5,a)') NTIME_pm,'solX.dat'
-     open(1,file=filout)
-
-     WRITE(1,'(a100)')'VARIABLES = "X" "Y" "Z" "U" "V" "W" "VORTX" "VORTY" "VORTZ"'! "Vol" "PSIX" "PSIY" "PSIZ"'
-     do ii=1,NXPOS_AVA_512_128_128
-        i=NX_AVA(ii) !/2  PM: DX=DY=DZ=8m
-        WRITE(1,'(a11,i3,a8,i4,a7,i4,a7,i4,a11)') 'ZONE T= "',i,'", I=',1,&
-                                             ', J=',NYf_bl(1)-NYs_bl(1)+1, &
-                                             ', K=',NZf_bl(1)-NZs_bl(1)+1,  ', F=POINT'
-        do k=NZs_bl(1),NZf_bl(1)
-        do j=NYs_bl(1),NYf_bl(1)
-             XPM=XMIN_pm+(I-1)*DXpm
-             YPM=YMIN_pm+(J-1)*DYpm
-             ZPM=ZMIN_pm+(K-1)*DZpm
-             velocx = VelvrX_pm(i,j,k)
-             velocy = VelvrY_pm(i,j,k)
-             velocz = VelvrZ_pm(i,j,k)
-             WRITE(1,'(16(e28.17,1x))')XPM,YPM,ZPM,velocx,velocy,velocz,-RHS_pm(1,I,J,K),&
-                                      -RHS_pm(2,I,J,K),&
-                                      -RHS_pm(3,I,J,K)!,RHS_pm(4,I,J,K),SOL_pm(1,I,J,K),SOL_pm(2,I,J,K), SOL_pm(3,I,J,K)
-        enddo !j
-        enddo !k
-     enddo !ii
-     close(1)
-    call system('gzip '//filout)
-
-  return
-
-End Subroutine writesolXavatar
-
-Subroutine writeline
-    use vpm_vars        
-    use pmeshpar
-    use parvar
-    use pmgrid
-    use MPI
-
-    
-    character*50        :: filout
-    integer           :: i,j,k,jmat(9),kmat(9),NNJ,NNK,il
-    double precision  :: XPM,YPM,ZPM,velocx,velocy,velocz
-
-
-    NNJ= NYf_bl(1) - NYs_bl(1)+1
-    NNK= NZf_bl(1) - NZs_bl(1)+1
-    jmat(1)=0.5 *NNJ;kmat(1)=0.5 *NNK
-    jmat(2)=0.25*NNJ;kmat(2)=0.25*NNK
-    jmat(3)=0.25*NNJ;kmat(3)=0.75*NNK
-    jmat(4)=0.75*NNJ;kmat(4)=0.25*NNK
-    jmat(5)=0.75*NNJ;kmat(5)=0.75*NNK
-    jmat(6)=0.5*NNJ ;kmat(6)=0.25*NNK
-    jmat(7)=0.5*NNJ;kmat(7)=0.75*NNK
-    jmat(8)=0.25*NNJ;kmat(8)=0.5*NNK
-    jmat(9)=0.75*NNJ;kmat(9)=0.5*NNK
-    do i= 1, 9 
-       j=jmat(i);k=kmat(i)
-       write(filout,'(i2.2,a)') i,'hist.bin'
-       open(1,file=filout,access='APPEND',form='unformatted')
-       if (NTIME_pm.eq.1) then
-          rewind(1)
-          write(1) XMIN_pm,YMIN_pm,ZMIN_pm
-          write(1) DXpm,DYpm,DZpm
-          write(1) NXs_bl(1),NXf_bl(1),j,k
-       endif
-       WRITE(1) NTIME_pm,(velvrx_pm(il,j,k),il=NXs_bl(1),NXf_bl(1)),&
-                        (velvry_pm(il,j,k),il=NXs_bl(1),NXf_bl(1)),&
-                        (velvrz_pm(il,j,k),il=NXs_bl(1),NXf_bl(1))
-                          
-                              
-
-       close(1)
-    enddo
-
-
-End Subroutine writeline
 
 End Module vpm_lib

@@ -544,3 +544,22 @@ call MPI_TYPE_COMMIT(mat2,ierr)
 
 End Subroutine mpimat2_pm
 
+
+Subroutine velbcast
+    use vpm_vars
+    use pmgrid
+    use pmeshpar
+    use MPI
+    integer :: my_rank,np,ierr,mat3
+
+    call MPI_Comm_Rank(MPI_COMM_WORLD,my_rank,ierr)
+    call MPI_Comm_size(MPI_COMM_WORLD,np,ierr)
+
+    !---------------------------------------------
+    call mpimat3_pm(mat3,NXpm,NYpm,NZpm)
+    call MPI_BCAST(velvrx_pm,1,mat3,0,MPI_COMM_WORLD,ierr)
+    call MPI_BCAST(velvry_pm,1,mat3,0,MPI_COMM_WORLD,ierr)
+    call MPI_TYPE_FREE(mat3,ierr)
+    !--------------------------------------------
+End Subroutine velbcast
+
